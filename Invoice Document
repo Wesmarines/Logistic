@@ -66,7 +66,7 @@
 
       <div class="grid grid-cols-2 gap-2">
         <textarea id="invoiceTo" rows="5" class="w-full px-2 py-1 rounded border" placeholder="Invoice To"></textarea>
-        <textarea id="shipTo" rows="5" class="w-full px-2 py-1 rounded border" placeholder="Ship To"></textarea>
+        <textarea id="shipTo" rows="5" class="w-full px-2 py-1 rounded border" placeholder="Delivery Address"></textarea>
       </div>
 
       <table id="itemsTable" class="w-full text-sm mt-3 border border-gray-300">
@@ -147,49 +147,38 @@ function readFile(file) {
   });
 }
 
-/* --------- helpers for packing/delivery fitting --------- */
-function measureTableHeight(startY, head, body, margin, fontSize, cellPadding) {
-  const probe = new jsPDF();
-  probe.autoTable({
-    startY,
-    head,
-    body,
-    styles: { fontSize, cellPadding, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0] },
-    headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold" },
-    theme: "grid",
-    margin: { left: margin, right: margin, bottom: 0 },
-    pageBreak: 'avoid' // keep on one page for measuring
-  });
-  return probe.lastAutoTable.finalY;
-}
-
 function drawReceiverBox(pdf, pageW, pageH, margin, topY) {
-  // total footprint ~ 60
-  const tableX = pageW / 2 - 75;
-  const tableW = 150;
+  const tableW = pageW - 2 * margin;
+  const tableX = margin;
   let yBox = topY;
   pdf.setFontSize(12);
+  pdf.setTextColor(0, 0, 0);
   pdf.text("For Receiver", pageW / 2, yBox, { align: "center" });
   yBox += 6;
   pdf.setFontSize(9);
+  pdf.setDrawColor(0, 0, 0);
   pdf.rect(tableX, yBox, tableW, 10);
   pdf.text("Receiver to Sign and Stamp as Received, with received date, Name and Signature",
     pageW / 2, yBox + 7, { align: "center" });
   yBox += 10;
-  pdf.rect(tableX, yBox, tableW, 40);
-  // columns & rows inside
-  pdf.line(tableX + 90, yBox, tableX + 90, yBox + 40);
-  pdf.line(tableX, yBox + 10, tableX + 90, yBox + 10);
-  pdf.line(tableX, yBox + 20, tableX + 90, yBox + 20);
-  pdf.line(tableX, yBox + 30, tableX + 90, yBox + 30);
+  const boxHeight = 40;
+  pdf.rect(tableX, yBox, tableW, boxHeight);
+
+  const cols = [tableX, tableX + tableW * 0.6, tableX + tableW];
+  const rows = [yBox + 10, yBox + 20, yBox + 30, yBox + boxHeight];
+  pdf.line(cols[1], yBox, cols[1], yBox + boxHeight);
+  for (let r of rows) {
+    pdf.line(cols[0], r, cols[2], r);
+  }
+  pdf.setFontSize(9);
   pdf.text("Signature of Receiver", tableX + 2, yBox + 7);
   pdf.text("Name of Receiver", tableX + 2, yBox + 17);
   pdf.text("Title of Receiver", tableX + 2, yBox + 27);
   pdf.text("Date Received", tableX + 2, yBox + 37);
-  pdf.text("Ship or Company Stamp", tableX + 95, yBox + 20);
-  return yBox + 40;
+  pdf.text("Ship or Company Stamp", cols[1] + 5, yBox + 20);
+
+  return yBox + boxHeight;
 }
-/* -------------------------------------------------------- */
 
 $('genBtn').onclick = async () => {
   try {
@@ -206,21 +195,24 @@ $('genBtn').onclick = async () => {
     if (headerLogo) {
       pdf.addImage(headerLogo, "PNG", margin, 5, pageW - 2 * margin, 20);
     }
+    pdf.setFontSize(9);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text("GST Registered No: 202018019H.", margin, 30);
 
     pdf.setFontSize(14);
     pdf.setTextColor(0, 0, 0);
-    if (docType === "invoice") pdf.text("COMMERCIAL INVOICE", pageW / 2, 30, { align: "center" });
-    else if (docType === "packing") pdf.text("PACKING LIST", pageW / 2, 30, { align: "center" });
-    else pdf.text("DELIVERY NOTE", pageW / 2, 30, { align: "center" });
+    if (docType === "invoice") pdf.text("COMMERCIAL INVOICE", pageW / 2, 40, { align: "center" });
+    else if (docType === "packing") pdf.text("PACKING LIST", pageW / 2, 40, { align: "center" });
+    else pdf.text("DELIVERY NOTE", pageW / 2, 40, { align: "center" });
 
     pdf.setFontSize(10);
-    pdf.text(`No: ${$('docNo').value || "DOC-" + Date.now()}`, pageW / 2, 36, { align: "center" });
-    pdf.text(`Date: ${$('docDate').value}`, pageW / 2, 42, { align: "center" });
+    pdf.text(`No: ${$('docNo').value || "DOC-" + Date.now()}`, pageW / 2, 46, { align: "center" });
+    pdf.text(`Date: ${$('docDate').value}`, pageW / 2, 52, { align: "center" });
 
-    let y = 50;
+    let y = 60;
     pdf.setDrawColor(0, 0, 0);
     pdf.setTextColor(0, 0, 0);
-    pdf.rect(margin, y, pageW - 2 * margin, 36); 
+    pdf.rect(margin, y, pageW - 2 * margin, 36);
     let boxY = y + 6;
     pdf.text(`VESSEL NAME: ${$('vesselName').value}`, margin + 4, boxY); boxY += 5;
     pdf.text(`IMO NUMBER: ${$('imoNumber').value}`, margin + 4, boxY); boxY += 5;
@@ -237,27 +229,23 @@ $('genBtn').onclick = async () => {
     const boxHeight = (maxLines + 1) * 6 + 6;
     pdf.rect(margin, y, pageW - 2 * margin, boxHeight);
     pdf.line(margin + colW + 8, y, margin + colW + 8, y + boxHeight);
+    pdf.setFontSize(10);
     pdf.text("Invoice To:", margin + 4, y + 5);
-    pdf.text("Ship To:", margin + colW + 12, y + 5);
+    pdf.text("Delivery Address:", margin + colW + 12, y + 5);
     invoiceLines.forEach((line, i) => pdf.text(line, margin + 4, y + 11 + i * 5));
     shipLines.forEach((line, i) => pdf.text(line, margin + colW + 12, y + 11 + i * 5));
 
     y += boxHeight + 5;
 
-    /* =====================
-       TABLE + RECEIVER LOGIC
-       ===================== */
-    let head, body;
     if (docType === "invoice") {
-      head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Unit Rate", "Qty", "Amount"]];
-      body = items.map((it, i) => [i + 1, it.desc, it.hs, it.country, it.unit, money(it.rate), it.qty, money(it.rate * it.qty)]);
-      
+      const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Unit Rate", "Qty", "Amount"]];
+      const body = items.map((it, i) => [i + 1, it.desc, it.hs, it.country, it.unit, money(it.rate), it.qty, money(it.rate * it.qty)]);
       pdf.autoTable({
         startY: y,
         head,
         body,
-        styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0] },
-        headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold" },
+        styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0], halign: 'left' },
+        headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold", halign: 'center' },
         theme: "grid",
         margin: { left: margin, right: margin, bottom: 30 },
       });
@@ -271,96 +259,41 @@ $('genBtn').onclick = async () => {
       pdf.setFontSize(12);
       pdf.text(`TOTAL: ${currencyCode} ${money(subtotal)}`, lastColX, finalY + 14, { align: "right" });
 
-      // footer
       pdf.setFontSize(9);
+      pdf.setTextColor(0, 0, 0);
       pdf.text("Issued by:", margin, pageH - margin - 20);
       pdf.text("WES Marine Controls Pte Ltd.", margin, pageH - margin - 14);
+      pdf.text("This invoice is not for payment", margin, pageH - margin - 4);
+
       if (stampImg) {
         const stampSize = 25;
         pdf.addImage(stampImg, "PNG", pageW - margin - stampSize, pageH - margin - stampSize, stampSize, stampSize);
-        pdf.text("This invoice is not for payment", pageW - margin - 2, pageH - margin - 4, { align: "right" });
       }
-    } 
-    else if (docType === "packing" || docType === "dn") {
-      const isPacking = docType === "packing";
-      head = isPacking
-        ? [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Qty"]]
-        : [["S.No", "Item Description", "Unit", "Qty"]];
 
-      const rowsPerPage = 10;
-      const totalPages = Math.ceil(items.length / rowsPerPage);
-
-      for (let page = 0; page < totalPages; page++) {
-        const start = page * rowsPerPage;
-        const end = start + rowsPerPage;
-        const pageRows = items.slice(start, end).map((it, idx) => {
-          const serial = start + idx + 1;
-          return isPacking
-            ? [serial, it.desc, it.hs, it.country, it.unit, it.qty]
-            : [serial, it.desc, it.unit, it.qty];
-        });
-
-        // On the last page, ensure table + Receiver fit together
-        const isLast = page === totalPages - 1;
-        const startY = page === 0 ? y : 40;
-
-        let fontSize = 9, cellPadding = 2; // defaults
-        if (isLast) {
-          const receiverFootprint = 60; // estimated pixels needed for receiver block
-          const spacing = 12;
-          const available = pageH - 12 /*bottom margin*/ - (startY) - receiverFootprint - spacing;
-
-          // Try to fit table by reducing font/padding as needed
-          const fontCandidates = [9, 8.5, 8, 7.5, 7];
-          const padCandidates = [2, 1.5, 1];
-          let fitted = false;
-          for (let f of fontCandidates) {
-            for (let p of padCandidates) {
-              const h = measureTableHeight(startY, head, pageRows, margin, f, p);
-              if (h <= startY + available) {
-                fontSize = f; cellPadding = p; fitted = true;
-                break;
-              }
-            }
-            if (fitted) break;
-          }
-        }
-
-        // Draw the table for this page
-        pdf.autoTable({
-          startY,
-          head,
-          body: pageRows,
-          styles: { fontSize, cellPadding, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0] },
-          headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold" },
-          theme: "grid",
-          margin: { left: margin, right: margin, bottom: 0 },
-          pageBreak: 'auto'
-        });
-
-        if (isLast) {
-          // Place Receiver on same page if it fits, else push to a new page top
-          const receiverTop = pdf.lastAutoTable.finalY + 12;
-          const receiverBottom = receiverTop + 60; // matches footprint above
-          if (receiverBottom <= pageH - 12) {
-            drawReceiverBox(pdf, pageW, pageH, margin, receiverTop);
-          } else {
-            pdf.addPage();
-            drawReceiverBox(pdf, pageW, pageH, margin, 40);
-          }
-        } else {
-          pdf.addPage();
-        }
-      }
+    } else {
+      const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Qty"]];
+      const body = items.map((it, i) => [i + 1, it.desc, it.hs, it.country, it.unit, it.qty]);
+      pdf.autoTable({
+        startY: y,
+        head,
+        body,
+        styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0], halign: 'center' },
+        headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold", halign: 'center' },
+        theme: "grid",
+        margin: { left: margin, right: margin, bottom: 30 },
+      });
+      drawReceiverBox(pdf, pageW, pageH, margin, pdf.lastAutoTable.finalY + 10);
     }
 
-    const fileName = docType === "invoice" ? "Commercial_Invoice.pdf" :
-                     docType === "packing" ? "Packing_List.pdf" : "Delivery_Note.pdf";
-    pdf.save(fileName);
-  } catch (err) {
-    alert("Error generating PDF: " + err.message);
+    pdf.save((docType === "invoice" ? "commercial_invoice" :
+             docType === "packing" ? "packing_list" : "delivery_note") + ".pdf");
+
+  } catch (e) {
+    console.error(e);
+    alert("Error generating PDF");
   }
 };
 </script>
 </body>
 </html>
+
