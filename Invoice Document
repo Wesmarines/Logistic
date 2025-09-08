@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>WES Invoice Generator</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body class="bg-gray-200 font-sans">
+<div class="max-w-7xl mx-auto py-8">
+  <h1 class="text-3xl font-bold text-center mb-6 text-blue-700">📄 Document Generator</h1>
+
+  <div class="grid md:grid-cols-3 gap-6">
+    <!-- Sidebar -->
+    <div class="bg-gray-900 text-white p-5 rounded-lg space-y-4 shadow-lg">
+      <h2 class="text-lg font-semibold mb-2">⚙️ Settings</h2>
+
+      <label class="block text-sm">Document Type</label>
+      <select id="docType" class="w-full px-2 py-1 rounded text-black">
+        <option value="invoice">Commercial Invoice</option>
+        <option value="packing">Packing List</option>
+        <option value="dn">Delivery Note</option>
+      </select>
+
+      <label class="block text-sm">Document No.</label>
+      <input id="docNo" class="w-full px-2 py-1 rounded text-black" placeholder="Doc No" />
+
+      <label class="block text-sm">Date</label>
+      <input id="docDate" type="date" class="w-full px-2 py-1 rounded text-black" />
+
+      <label class="block text-sm">Currency</label>
+      <select id="currency" class="w-full px-2 py-1 rounded text-black">
+        <option value="USD">USD - US Dollar</option>
+        <option value="SGD">SGD - Singapore Dollar</option>
+        <option value="INR">INR - Indian Rupee</option>
+      </select>
+
+      <label class="block text-sm">Header Logo</label>
+      <input id="headerLogo" type="file" accept="image/*" class="text-sm"/>
+
+      <label class="block text-sm">Stamp</label>
+      <input id="stampImg" type="file" accept="image/*" class="text-sm"/>
+
+      <button id="addItemBtn" class="w-full bg-blue-600 py-2 rounded hover:bg-blue-700">➕ Add Item</button>
+      <button id="clearItemsBtn" class="w-full bg-red-600 py-2 rounded hover:bg-red-700">🗑 Clear Items</button>
+      <button id="genBtn" class="w-full bg-green-600 py-2 rounded hover:bg-green-700">📑 Generate PDF</button>
+    </div>
+
+    <!-- Form -->
+    <div class="md:col-span-2 bg-white p-6 rounded-lg shadow-lg space-y-4">
+      <h2 class="text-lg font-semibold mb-2 text-gray-700">📝 Details</h2>
+
+      <div class="grid grid-cols-2 gap-2">
+        <input id="vesselName" placeholder="Vessel Name" class="px-2 py-1 rounded border"/>
+        <input id="imoNumber" placeholder="IMO Number" class="px-2 py-1 rounded border"/>
+        <input id="poNumber" placeholder="PO Number" class="px-2 py-1 rounded border"/>
+        <input id="wesNumber" placeholder="WES No" class="px-2 py-1 rounded border"/>
+        <input id="clientName" placeholder="Client Name" class="px-2 py-1 rounded border"/>
+        <input id="packageDetails" placeholder="Package Details" class="px-2 py-1 rounded border"/>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <textarea id="invoiceTo" rows="5" class="w-full px-2 py-1 rounded border" placeholder="Invoice To"></textarea>
+        <textarea id="shipTo" rows="5" class="w-full px-2 py-1 rounded border" placeholder="Ship To"></textarea>
+      </div>
+
+      <table id="itemsTable" class="w-full text-sm mt-3 border border-gray-300">
+        <thead class="bg-gray-100">
+          <tr>
+            <th>S.No</th><th>Item Description</th><th>HS Code</th><th>Country of Origin</th>
+            <th>Unit</th><th>Unit Rate</th><th>Qty</th><th>Amount</th>
+          </tr>
+        </thead>
+        <tbody id="itemsBody"></tbody>
+      </table>
+
+      <div class="text-right font-bold text-lg mt-3">
+        Total: <span id="webTotal">0.00</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { jsPDF } = window.jspdf;
+function $(id) { return document.getElementById(id); }
+function money(v) { return Number(v || 0).toFixed(2); }
+$('docDate').valueAsDate = new Date();
+
+let items = [];
+function addItem() {
+  items.push({ desc: "", hs: "", country: "", unit: "PCE", rate: 0, qty: 1 });
+  render();
+}
+function clearItems() { items = []; render(); }
+function render() {
+  const body = $('itemsBody'); body.innerHTML = "";
+  items.forEach((it, i) => {
+    const row = document.createElement("tr");
+    row.className = "border-b";
+    row.innerHTML = `
+      <td>${i + 1}</td>
+      <td><input data-i="${i}" data-f="desc" value="${it.desc}" class="w-full border px-1"/></td>
+      <td><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1"/></td>
+      <td><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1"/></td>
+      <td><input data-i="${i}" data-f="unit" value="${it.unit}" class="w-full border px-1"/></td>
+      <td><input data-i="${i}" data-f="rate" type="number" value="${it.rate}" class="w-full border px-1"/></td>
+      <td><input data-i="${i}" data-f="qty" type="number" value="${it.qty}" class="w-full border px-1"/></td>
+      <td class="amount">${money(it.rate * it.qty)}</td>
+    `;
+    body.appendChild(row);
+  });
+  body.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const i = inp.dataset.i, f = inp.dataset.f;
+      items[i][f] = f === "rate" || f === "qty" ? Number(inp.value) : inp.value;
+      updateTotals(); renderAmountsOnly();
+    });
+  });
+  updateTotals();
+}
+function renderAmountsOnly() {
+  document.querySelectorAll("#itemsBody tr").forEach((row, i) => {
+    row.querySelector(".amount").textContent = money(items[i].rate * items[i].qty);
+  });
+}
+function updateTotals() {
+  let subtotal = items.reduce((s, it) => s + (it.rate * it.qty), 0);
+  const currencyCode = $('currency').value;
+  $("webTotal").textContent = currencyCode + " " + money(subtotal);
+}
+$('addItemBtn').onclick = addItem;
+$('clearItemsBtn').onclick = clearItems;
+addItem();
+
+function readFile(file) {
+  return new Promise(r => {
+    if (!file) return r(null);
+    const fr = new FileReader();
+    fr.onload = () => r(fr.result);
+    fr.readAsDataURL(file);
+  });
+}
+
+/* --------- helpers for packing/delivery fitting --------- */
+function measureTableHeight(startY, head, body, margin, fontSize, cellPadding) {
+  const probe = new jsPDF();
+  probe.autoTable({
+    startY,
+    head,
+    body,
+    styles: { fontSize, cellPadding, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0] },
+    headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold" },
+    theme: "grid",
+    margin: { left: margin, right: margin, bottom: 0 },
+    pageBreak: 'avoid' // keep on one page for measuring
+  });
+  return probe.lastAutoTable.finalY;
+}
+
+function drawReceiverBox(pdf, pageW, pageH, margin, topY) {
+  // total footprint ~ 60
+  const tableX = pageW / 2 - 75;
+  const tableW = 150;
+  let yBox = topY;
+  pdf.setFontSize(12);
+  pdf.text("For Receiver", pageW / 2, yBox, { align: "center" });
+  yBox += 6;
+  pdf.setFontSize(9);
+  pdf.rect(tableX, yBox, tableW, 10);
+  pdf.text("Receiver to Sign and Stamp as Received, with received date, Name and Signature",
+    pageW / 2, yBox + 7, { align: "center" });
+  yBox += 10;
+  pdf.rect(tableX, yBox, tableW, 40);
+  // columns & rows inside
+  pdf.line(tableX + 90, yBox, tableX + 90, yBox + 40);
+  pdf.line(tableX, yBox + 10, tableX + 90, yBox + 10);
+  pdf.line(tableX, yBox + 20, tableX + 90, yBox + 20);
+  pdf.line(tableX, yBox + 30, tableX + 90, yBox + 30);
+  pdf.text("Signature of Receiver", tableX + 2, yBox + 7);
+  pdf.text("Name of Receiver", tableX + 2, yBox + 17);
+  pdf.text("Title of Receiver", tableX + 2, yBox + 27);
+  pdf.text("Date Received", tableX + 2, yBox + 37);
+  pdf.text("Ship or Company Stamp", tableX + 95, yBox + 20);
+  return yBox + 40;
+}
+/* -------------------------------------------------------- */
+
+$('genBtn').onclick = async () => {
+  try {
+    const docType = $('docType').value;
+    const pdf = new jsPDF();
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 12;
+
+    const headerLogo = await readFile($('headerLogo').files[0]);
+    const stampImg = await readFile($('stampImg').files[0]);
+    const currencyCode = $('currency').value;
+
+    if (headerLogo) {
+      pdf.addImage(headerLogo, "PNG", margin, 5, pageW - 2 * margin, 20);
+    }
+
+    pdf.setFontSize(14);
+    pdf.setTextColor(0, 0, 0);
+    if (docType === "invoice") pdf.text("COMMERCIAL INVOICE", pageW / 2, 30, { align: "center" });
+    else if (docType === "packing") pdf.text("PACKING LIST", pageW / 2, 30, { align: "center" });
+    else pdf.text("DELIVERY NOTE", pageW / 2, 30, { align: "center" });
+
+    pdf.setFontSize(10);
+    pdf.text(`No: ${$('docNo').value || "DOC-" + Date.now()}`, pageW / 2, 36, { align: "center" });
+    pdf.text(`Date: ${$('docDate').value}`, pageW / 2, 42, { align: "center" });
+
+    let y = 50;
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setTextColor(0, 0, 0);
+    pdf.rect(margin, y, pageW - 2 * margin, 36); 
+    let boxY = y + 6;
+    pdf.text(`VESSEL NAME: ${$('vesselName').value}`, margin + 4, boxY); boxY += 5;
+    pdf.text(`IMO NUMBER: ${$('imoNumber').value}`, margin + 4, boxY); boxY += 5;
+    pdf.text(`PO NUMBER: ${$('poNumber').value}`, margin + 4, boxY); boxY += 5;
+    pdf.text(`WES NO: ${$('wesNumber').value}`, margin + 4, boxY); boxY += 5;
+    pdf.text(`CLIENT NAME: ${$('clientName').value}`, margin + 4, boxY); boxY += 5;
+    pdf.text(`PACKAGE DETAILS: ${$('packageDetails').value}`, margin + 4, boxY);
+
+    y += 40;
+    const colW = (pageW - 2 * margin) / 2 - 4;
+    const invoiceLines = pdf.splitTextToSize($('invoiceTo').value.trim(), colW);
+    const shipLines = pdf.splitTextToSize($('shipTo').value.trim(), colW);
+    const maxLines = Math.max(invoiceLines.length, shipLines.length);
+    const boxHeight = (maxLines + 1) * 6 + 6;
+    pdf.rect(margin, y, pageW - 2 * margin, boxHeight);
+    pdf.line(margin + colW + 8, y, margin + colW + 8, y + boxHeight);
+    pdf.text("Invoice To:", margin + 4, y + 5);
+    pdf.text("Ship To:", margin + colW + 12, y + 5);
+    invoiceLines.forEach((line, i) => pdf.text(line, margin + 4, y + 11 + i * 5));
+    shipLines.forEach((line, i) => pdf.text(line, margin + colW + 12, y + 11 + i * 5));
+
+    y += boxHeight + 5;
+
+    /* =====================
+       TABLE + RECEIVER LOGIC
+       ===================== */
+    let head, body;
+    if (docType === "invoice") {
+      head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Unit Rate", "Qty", "Amount"]];
+      body = items.map((it, i) => [i + 1, it.desc, it.hs, it.country, it.unit, money(it.rate), it.qty, money(it.rate * it.qty)]);
+      
+      pdf.autoTable({
+        startY: y,
+        head,
+        body,
+        styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0] },
+        headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold" },
+        theme: "grid",
+        margin: { left: margin, right: margin, bottom: 30 },
+      });
+
+      let finalY = pdf.lastAutoTable.finalY + 10;
+      let subtotal = items.reduce((s, it) => s + (it.qty * it.rate), 0);
+      const lastColX = pdf.lastAutoTable.finalX || (pageW - margin);
+      pdf.setFontSize(10);
+      pdf.text(`Subtotal: ${currencyCode} ${money(subtotal)}`, lastColX, finalY, { align: "right" });
+      pdf.text(`GST (0%): ${currencyCode} 0.00`, lastColX, finalY + 6, { align: "right" });
+      pdf.setFontSize(12);
+      pdf.text(`TOTAL: ${currencyCode} ${money(subtotal)}`, lastColX, finalY + 14, { align: "right" });
+
+      // footer
+      pdf.setFontSize(9);
+      pdf.text("Issued by:", margin, pageH - margin - 20);
+      pdf.text("WES Marine Controls Pte Ltd.", margin, pageH - margin - 14);
+      if (stampImg) {
+        const stampSize = 25;
+        pdf.addImage(stampImg, "PNG", pageW - margin - stampSize, pageH - margin - stampSize, stampSize, stampSize);
+        pdf.text("This invoice is not for payment", pageW - margin - 2, pageH - margin - 4, { align: "right" });
+      }
+    } 
+    else if (docType === "packing" || docType === "dn") {
+      const isPacking = docType === "packing";
+      head = isPacking
+        ? [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Qty"]]
+        : [["S.No", "Item Description", "Unit", "Qty"]];
+
+      const rowsPerPage = 10;
+      const totalPages = Math.ceil(items.length / rowsPerPage);
+
+      for (let page = 0; page < totalPages; page++) {
+        const start = page * rowsPerPage;
+        const end = start + rowsPerPage;
+        const pageRows = items.slice(start, end).map((it, idx) => {
+          const serial = start + idx + 1;
+          return isPacking
+            ? [serial, it.desc, it.hs, it.country, it.unit, it.qty]
+            : [serial, it.desc, it.unit, it.qty];
+        });
+
+        // On the last page, ensure table + Receiver fit together
+        const isLast = page === totalPages - 1;
+        const startY = page === 0 ? y : 40;
+
+        let fontSize = 9, cellPadding = 2; // defaults
+        if (isLast) {
+          const receiverFootprint = 60; // estimated pixels needed for receiver block
+          const spacing = 12;
+          const available = pageH - 12 /*bottom margin*/ - (startY) - receiverFootprint - spacing;
+
+          // Try to fit table by reducing font/padding as needed
+          const fontCandidates = [9, 8.5, 8, 7.5, 7];
+          const padCandidates = [2, 1.5, 1];
+          let fitted = false;
+          for (let f of fontCandidates) {
+            for (let p of padCandidates) {
+              const h = measureTableHeight(startY, head, pageRows, margin, f, p);
+              if (h <= startY + available) {
+                fontSize = f; cellPadding = p; fitted = true;
+                break;
+              }
+            }
+            if (fitted) break;
+          }
+        }
+
+        // Draw the table for this page
+        pdf.autoTable({
+          startY,
+          head,
+          body: pageRows,
+          styles: { fontSize, cellPadding, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0] },
+          headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold" },
+          theme: "grid",
+          margin: { left: margin, right: margin, bottom: 0 },
+          pageBreak: 'auto'
+        });
+
+        if (isLast) {
+          // Place Receiver on same page if it fits, else push to a new page top
+          const receiverTop = pdf.lastAutoTable.finalY + 12;
+          const receiverBottom = receiverTop + 60; // matches footprint above
+          if (receiverBottom <= pageH - 12) {
+            drawReceiverBox(pdf, pageW, pageH, margin, receiverTop);
+          } else {
+            pdf.addPage();
+            drawReceiverBox(pdf, pageW, pageH, margin, 40);
+          }
+        } else {
+          pdf.addPage();
+        }
+      }
+    }
+
+    const fileName = docType === "invoice" ? "Commercial_Invoice.pdf" :
+                     docType === "packing" ? "Packing_List.pdf" : "Delivery_Note.pdf";
+    pdf.save(fileName);
+  } catch (err) {
+    alert("Error generating PDF: " + err.message);
+  }
+};
+</script>
+</body>
+</html>
