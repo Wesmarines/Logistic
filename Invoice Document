@@ -21,6 +21,17 @@
     .text-left {
       text-align: left;
     }
+    .delete-btn {
+      background-color: #f87171;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .delete-btn:hover {
+      background-color: #ef4444;
+    }
   </style>
 </head>
 <body class="bg-gray-200 font-sans">
@@ -59,7 +70,7 @@
       <input id="stampImg" type="file" accept="image/*" class="text-sm"/>
 
       <button id="addItemBtn" class="w-full bg-blue-600 py-2 rounded hover:bg-blue-700">➕ Add Item</button>
-      <button id="clearItemsBtn" class="w-full bg-red-600 py-2 rounded hover:bg-red-700">🗑 Clear Items</button>
+      <button id="clearItemsBtn" class="w-full bg-red-600 py-2 rounded hover:bg-red-700">🗑 Clear All Items</button>
       <button id="genBtn" class="w-full bg-green-600 py-2 rounded hover:bg-green-700">📑 Generate PDF</button>
     </div>
 
@@ -93,6 +104,7 @@
             <th class="text-center">Qty</th>
             <th class="text-center">Discount %</th>
             <th class="text-right">Amount</th>
+            <th class="text-center">Action</th>
           </tr>
         </thead>
         <tbody id="itemsBody"></tbody>
@@ -117,6 +129,10 @@ function addItem() {
   render();
 }
 function clearItems() { items = []; render(); }
+function deleteItem(index) {
+  items.splice(index, 1);
+  render();
+}
 function render() {
   const body = $('itemsBody'); body.innerHTML = "";
   items.forEach((it, i) => {
@@ -133,6 +149,7 @@ function render() {
       <td><input data-i="${i}" data-f="qty" type="number" value="${it.qty}" class="w-full border px-1 text-center"/></td>
       <td><input data-i="${i}" data-f="discount" type="number" value="${it.discount}" class="w-full border px-1 text-center"/></td>
       <td class="amount text-right">${money(amount)}</td>
+      <td class="text-center"><button class="delete-btn" data-i="${i}">Remove</button></td>
     `;
     body.appendChild(row);
   });
@@ -141,6 +158,12 @@ function render() {
       const i = inp.dataset.i, f = inp.dataset.f;
       items[i][f] = f === "rate" || f === "qty" || f === "discount" ? Number(inp.value) : inp.value;
       updateTotals(); renderAmountsOnly();
+    });
+  });
+  body.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = btn.dataset.i;
+      deleteItem(parseInt(i));
     });
   });
   updateTotals();
