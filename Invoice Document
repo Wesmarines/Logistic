@@ -10,6 +10,18 @@
   <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  
+  <style>
+    .text-center {
+      text-align: center;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .text-left {
+      text-align: left;
+    }
+  </style>
 </head>
 <body class="bg-gray-200 font-sans">
 <div class="max-w-7xl mx-auto py-8">
@@ -72,8 +84,15 @@
       <table id="itemsTable" class="w-full text-sm mt-3 border border-gray-300">
         <thead class="bg-gray-100">
           <tr>
-            <th>S.No</th><th>Item Description</th><th>HS Code</th><th>Country of Origin</th>
-            <th>Unit</th><th>Unit Rate</th><th>Qty</th><th>Amount</th>
+            <th class="text-center">S.No</th>
+            <th class="text-left">Item Description</th>
+            <th class="text-center">HS Code</th>
+            <th class="text-center">Country of Origin</th>
+            <th class="text-center">Unit</th>
+            <th class="text-right">Unit Rate</th>
+            <th class="text-center">Qty</th>
+            <th class="text-center">Discount %</th>
+            <th class="text-right">Amount</th>
           </tr>
         </thead>
         <tbody id="itemsBody"></tbody>
@@ -94,7 +113,7 @@ $('docDate').valueAsDate = new Date();
 
 let items = [];
 function addItem() {
-  items.push({ desc: "", hs: "", country: "", unit: "PCE", rate: 0, qty: 1 });
+  items.push({ desc: "", hs: "", country: "", unit: "PCE", rate: 0, qty: 1, discount: 0 });
   render();
 }
 function clearItems() { items = []; render(); }
@@ -103,22 +122,24 @@ function render() {
   items.forEach((it, i) => {
     const row = document.createElement("tr");
     row.className = "border-b";
+    const amount = it.rate * it.qty * (1 - it.discount / 100);
     row.innerHTML = `
-      <td>${i + 1}</td>
-      <td><input data-i="${i}" data-f="desc" value="${it.desc}" class="w-full border px-1"/></td>
-      <td><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1"/></td>
-      <td><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1"/></td>
-      <td><input data-i="${i}" data-f="unit" value="${it.unit}" class="w-full border px-1"/></td>
-      <td><input data-i="${i}" data-f="rate" type="number" value="${it.rate}" class="w-full border px-1"/></td>
-      <td><input data-i="${i}" data-f="qty" type="number" value="${it.qty}" class="w-full border px-1"/></td>
-      <td class="amount">${money(it.rate * it.qty)}</td>
+      <td class="text-center">${i + 1}</td>
+      <td><input data-i="${i}" data-f="desc" value="${it.desc}" class="w-full border px-1 text-left"/></td>
+      <td><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1 text-center"/></td>
+      <td><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1 text-center"/></td>
+      <td><input data-i="${i}" data-f="unit" value="${it.unit}" class="w-full border px-1 text-center"/></td>
+      <td><input data-i="${i}" data-f="rate" type="number" value="${it.rate}" class="w-full border px-1 text-right"/></td>
+      <td><input data-i="${i}" data-f="qty" type="number" value="${it.qty}" class="w-full border px-1 text-center"/></td>
+      <td><input data-i="${i}" data-f="discount" type="number" value="${it.discount}" class="w-full border px-1 text-center"/></td>
+      <td class="amount text-right">${money(amount)}</td>
     `;
     body.appendChild(row);
   });
   body.querySelectorAll("input").forEach(inp => {
     inp.addEventListener("input", () => {
       const i = inp.dataset.i, f = inp.dataset.f;
-      items[i][f] = f === "rate" || f === "qty" ? Number(inp.value) : inp.value;
+      items[i][f] = f === "rate" || f === "qty" || f === "discount" ? Number(inp.value) : inp.value;
       updateTotals(); renderAmountsOnly();
     });
   });
@@ -126,11 +147,12 @@ function render() {
 }
 function renderAmountsOnly() {
   document.querySelectorAll("#itemsBody tr").forEach((row, i) => {
-    row.querySelector(".amount").textContent = money(items[i].rate * items[i].qty);
+    const amount = items[i].rate * items[i].qty * (1 - items[i].discount / 100);
+    row.querySelector(".amount").textContent = money(amount);
   });
 }
 function updateTotals() {
-  let subtotal = items.reduce((s, it) => s + (it.rate * it.qty), 0);
+  let subtotal = items.reduce((s, it) => s + (it.rate * it.qty * (1 - it.discount / 100)), 0);
   const currencyCode = $('currency').value;
   $("webTotal").textContent = currencyCode + " " + money(subtotal);
 }
@@ -164,18 +186,25 @@ function drawReceiverBox(pdf, pageW, pageH, margin, topY) {
   const boxHeight = 40;
   pdf.rect(tableX, yBox, tableW, boxHeight);
 
-  const cols = [tableX, tableX + tableW * 0.6, tableX + tableW];
+  // Draw the horizontal lines for the left section only
   const rows = [yBox + 10, yBox + 20, yBox + 30, yBox + boxHeight];
-  pdf.line(cols[1], yBox, cols[1], yBox + boxHeight);
   for (let r of rows) {
-    pdf.line(cols[0], r, cols[2], r);
+    pdf.line(tableX, r, tableX + tableW * 0.6, r);
   }
+  
+  // Draw only the vertical line between the two main sections
+  const colDividerX = tableX + tableW * 0.6;
+  pdf.line(colDividerX, yBox, colDividerX, yBox + boxHeight);
+  
   pdf.setFontSize(9);
   pdf.text("Signature of Receiver", tableX + 2, yBox + 7);
   pdf.text("Name of Receiver", tableX + 2, yBox + 17);
   pdf.text("Title of Receiver", tableX + 2, yBox + 27);
   pdf.text("Date Received", tableX + 2, yBox + 37);
-  pdf.text("Ship or Company Stamp", cols[1] + 5, yBox + 20);
+  
+  // Right section - blank space with centered text and no internal lines
+  pdf.setFontSize(11);
+  pdf.text("Ship or Company Stamp", colDividerX + (tableW * 0.4)/2, yBox + boxHeight/2, { align: "center" });
 
   return yBox + boxHeight;
 }
@@ -238,20 +267,42 @@ $('genBtn').onclick = async () => {
     y += boxHeight + 5;
 
     if (docType === "invoice") {
-      const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Unit Rate", "Qty", "Amount"]];
-      const body = items.map((it, i) => [i + 1, it.desc, it.hs, it.country, it.unit, money(it.rate), it.qty, money(it.rate * it.qty)]);
+      const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Unit Rate", "Qty", "Discount %", "Amount"]];
+      const body = items.map((it, i) => [
+        i + 1, 
+        it.desc, 
+        it.hs, 
+        it.country, 
+        it.unit, 
+        {content: money(it.rate), styles: {halign: 'right'}}, 
+        it.qty, 
+        it.discount,
+        {content: money(it.rate * it.qty * (1 - it.discount / 100)), styles: {halign: 'right'}}
+      ]);
+      
       pdf.autoTable({
         startY: y,
         head,
         body,
-        styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0], halign: 'left' },
+        styles: { fontSize: 8, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0] },
         headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold", halign: 'center' },
+        columnStyles: {
+          0: {halign: 'center'}, // S.No
+          1: {halign: 'left'},   // Item Description
+          2: {halign: 'center'}, // HS Code
+          3: {halign: 'center'}, // Country of Origin
+          4: {halign: 'center'}, // Unit
+          5: {halign: 'right'},  // Unit Rate
+          6: {halign: 'center'}, // Qty
+          7: {halign: 'center'}, // Discount %
+          8: {halign: 'right'}   // Amount
+        },
         theme: "grid",
         margin: { left: margin, right: margin, bottom: 30 },
       });
 
       let finalY = pdf.lastAutoTable.finalY + 10;
-      let subtotal = items.reduce((s, it) => s + (it.qty * it.rate), 0);
+      let subtotal = items.reduce((s, it) => s + (it.qty * it.rate * (1 - it.discount / 100)), 0);
       const lastColX = pdf.lastAutoTable.finalX || (pageW - margin);
       pdf.setFontSize(10);
       pdf.text(`Subtotal: ${currencyCode} ${money(subtotal)}`, lastColX, finalY, { align: "right" });
@@ -272,16 +323,28 @@ $('genBtn').onclick = async () => {
 
     } else {
       const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Qty"]];
-      const body = items.map((it, i) => [i + 1, it.desc, it.hs, it.country, it.unit, it.qty]);
+      const body = items.map((it, i) => [
+        i + 1, 
+        {content: it.desc, styles: {halign: 'left'}},
+        it.hs, 
+        it.country, 
+        it.unit, 
+        it.qty
+      ]);
       pdf.autoTable({
         startY: y,
         head,
         body,
         styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0], halign: 'center' },
         headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold", halign: 'center' },
+        columnStyles: {
+          1: {halign: 'left'} // Item Description left-aligned
+        },
         theme: "grid",
         margin: { left: margin, right: margin, bottom: 30 },
       });
+      
+      // Use the modified receiver box for packing list and delivery note
       drawReceiverBox(pdf, pageW, pageH, margin, pdf.lastAutoTable.finalY + 10);
     }
 
