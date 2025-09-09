@@ -97,8 +97,8 @@
           <tr>
             <th class="text-center">S.No</th>
             <th class="text-left">Item Description</th>
-            <th class="text-center">HS Code</th>
-            <th class="text-center">Country of Origin</th>
+            <th class="text-center hs-country-col">HS Code</th>
+            <th class="text-center hs-country-col">Country of Origin</th>
             <th class="text-center">Unit</th>
             <th class="text-right">Unit Rate</th>
             <th class="text-center">Qty</th>
@@ -133,17 +133,42 @@ function deleteItem(index) {
   items.splice(index, 1);
   render();
 }
+
+// Function to toggle HS Code and Country of Origin columns
+function toggleColumns() {
+  const docType = $('docType').value;
+  const hsCountryCols = document.querySelectorAll('.hs-country-col');
+  
+  if (docType === 'dn') {
+    hsCountryCols.forEach(col => col.style.display = 'none');
+  } else {
+    hsCountryCols.forEach(col => col.style.display = 'table-cell');
+  }
+}
+
 function render() {
   const body = $('itemsBody'); body.innerHTML = "";
+  const docType = $('docType').value;
+  
   items.forEach((it, i) => {
     const row = document.createElement("tr");
     row.className = "border-b";
     const amount = it.rate * it.qty * (1 - it.discount / 100);
-    row.innerHTML = `
+    
+    let rowHtml = `
       <td class="text-center">${i + 1}</td>
       <td><input data-i="${i}" data-f="desc" value="${it.desc}" class="w-full border px-1 text-left"/></td>
-      <td><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1 text-center"/></td>
-      <td><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1 text-center"/></td>
+    `;
+    
+    // Only show HS Code and Country of Origin for non-delivery notes
+    if (docType !== 'dn') {
+      rowHtml += `
+        <td class="hs-country-col"><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1 text-center"/></td>
+        <td class="hs-country-col"><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1 text-center"/></td>
+      `;
+    }
+    
+    rowHtml += `
       <td><input data-i="${i}" data-f="unit" value="${it.unit}" class="w-full border px-1 text-center"/></td>
       <td><input data-i="${i}" data-f="rate" type="number" value="${it.rate}" class="w-full border px-1 text-right"/></td>
       <td><input data-i="${i}" data-f="qty" type="number" value="${it.qty}" class="w-full border px-1 text-center"/></td>
@@ -151,8 +176,11 @@ function render() {
       <td class="amount text-right">${money(amount)}</td>
       <td class="text-center"><button class="delete-btn" data-i="${i}">Remove</button></td>
     `;
+    
+    row.innerHTML = rowHtml;
     body.appendChild(row);
   });
+  
   body.querySelectorAll("input").forEach(inp => {
     inp.addEventListener("input", () => {
       const i = inp.dataset.i, f = inp.dataset.f;
@@ -160,28 +188,41 @@ function render() {
       updateTotals(); renderAmountsOnly();
     });
   });
+  
   body.querySelectorAll(".delete-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const i = btn.dataset.i;
       deleteItem(parseInt(i));
     });
   });
+  
   updateTotals();
 }
+
 function renderAmountsOnly() {
   document.querySelectorAll("#itemsBody tr").forEach((row, i) => {
     const amount = items[i].rate * items[i].qty * (1 - items[i].discount / 100);
     row.querySelector(".amount").textContent = money(amount);
   });
 }
+
 function updateTotals() {
   let subtotal = items.reduce((s, it) => s + (it.rate * it.qty * (1 - it.discount / 100)), 0);
   const currencyCode = $('currency').value;
   $("webTotal").textContent = currencyCode + " " + money(subtotal);
 }
+
+// Event listeners
 $('addItemBtn').onclick = addItem;
 $('clearItemsBtn').onclick = clearItems;
+$('docType').onchange = function() {
+  toggleColumns();
+  render();
+};
+
+// Initialize
 addItem();
+toggleColumns();
 
 function readFile(file) {
   return new Promise(r => {
@@ -344,7 +385,7 @@ $('genBtn').onclick = async () => {
         pdf.addImage(stampImg, "PNG", pageW - margin - stampSize, pageH - margin - stampSize, stampSize, stampSize);
       }
 
-    } else {
+    } else if (docType === "packing") {
       const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Qty"]];
       const body = items.map((it, i) => [
         i + 1, 
@@ -368,6 +409,29 @@ $('genBtn').onclick = async () => {
       });
       
       // Use the modified receiver box for packing list and delivery note
+      drawReceiverBox(pdf, pageW, pageH, margin, pdf.lastAutoTable.finalY + 10);
+    } else { // Delivery Note
+      const head = [["S.No", "Item Description", "Unit", "Qty"]];
+      const body = items.map((it, i) => [
+        i + 1, 
+        {content: it.desc, styles: {halign: 'left'}},
+        it.unit, 
+        it.qty
+      ]);
+      pdf.autoTable({
+        startY: y,
+        head,
+        body,
+        styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0], halign: 'center' },
+        headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold", halign: 'center' },
+        columnStyles: {
+          1: {halign: 'left'} // Item Description left-aligned
+        },
+        theme: "grid",
+        margin: { left: margin, right: margin, bottom: 30 },
+      });
+      
+      // Use the modified receiver box for delivery note
       drawReceiverBox(pdf, pageW, pageH, margin, pdf.lastAutoTable.finalY + 10);
     }
 
