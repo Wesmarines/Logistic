@@ -42,10 +42,6 @@
     #itemsTable th:nth-child(7) { width: 8%; }  /* Qty */
     #itemsTable th:nth-child(8) { width: 10%; } /* Discount */
     #itemsTable th:nth-child(9) { width: 12%; } /* Amount */
-    .item-desc-input {
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
   </style>
 </head>
 <body class="bg-gray-200 font-sans">
@@ -158,7 +154,7 @@ function render() {
     const amount = it.rate * it.qty * (1 - it.discount / 100);
     row.innerHTML = `
       <td class="text-center p-1">${i + 1}</td>
-      <td class="p-1"><textarea data-i="${i}" data-f="desc" class="w-full border px-1 text-left item-desc-input" rows="2">${it.desc}</textarea></td>
+      <td class="p-1"><input data-i="${i}" data-f="desc" value="${it.desc}" class="w-full border px-1 text-left"/></td>
       <td class="p-1"><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1 text-center"/></td>
       <td class="p-1"><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1 text-center"/></td>
       <td class="p-1"><input data-i="${i}" data-f="unit" value="${it.unit}" class="w-full border px-1 text-center"/></td>
@@ -169,7 +165,7 @@ function render() {
     `;
     body.appendChild(row);
   });
-  body.querySelectorAll("input, textarea").forEach(inp => {
+  body.querySelectorAll("input").forEach(inp => {
     inp.addEventListener("input", () => {
       const i = inp.dataset.i, f = inp.dataset.f;
       items[i][f] = f === "rate" || f === "qty" || f === "discount" ? Number(inp.value) : inp.value;
@@ -283,7 +279,7 @@ $('genBtn').onclick = async () => {
     pdf.setDrawColor(0, 0, 0);
     pdf.setTextColor(0, 0, 0);
     
-    // Handle package details with proper text wrapping and alignment
+    // Handle package details with text wrapping
     const packageDetails = $('packageDetails').value;
     const packageLines = pdf.splitTextToSize(`PACKAGE DETAILS: ${packageDetails}`, pageW - 2 * margin - 8);
     const detailsBoxHeight = Math.max(36, 6 + (packageLines.length * 5));
@@ -296,14 +292,11 @@ $('genBtn').onclick = async () => {
     pdf.text(`WES NO: ${$('wesNumber').value}`, margin + 4, boxY); boxY += 5;
     pdf.text(`CLIENT NAME: ${$('clientName').value}`, margin + 4, boxY); boxY += 5;
     
-    // Handle multi-line package details with proper alignment
-    if (packageLines.length > 0) {
-      pdf.text(packageLines[0], margin + 4, boxY);
-      for (let i = 1; i < packageLines.length; i++) {
-        boxY += 5;
-        pdf.text(packageLines[i], margin + 4, boxY);
-      }
-    }
+    // Handle multi-line package details
+    packageLines.forEach((line, i) => {
+      pdf.text(line, margin + 4, boxY);
+      boxY += 5;
+    });
 
     y += detailsBoxHeight + 5;
 
@@ -325,13 +318,8 @@ $('genBtn').onclick = async () => {
     pdf.text("Invoice To:", margin + 4, y + 5);
     pdf.text("Delivery Address:", margin + colW + 12, y + 5);
     
-    // Improved address text rendering with proper alignment
-    invoiceLines.forEach((line, i) => {
-      pdf.text(line, margin + 4, y + 11 + i * 5);
-    });
-    shipLines.forEach((line, i) => {
-      pdf.text(line, margin + colW + 12, y + 11 + i * 5);
-    });
+    invoiceLines.forEach((line, i) => pdf.text(line, margin + 4, y + 11 + i * 5));
+    shipLines.forEach((line, i) => pdf.text(line, margin + colW + 12, y + 11 + i * 5));
 
     y += addressBoxHeight + 5;
 
@@ -351,21 +339,17 @@ $('genBtn').onclick = async () => {
         const pageItems = items.slice(startIndex, endIndex);
         
         const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Unit Rate", "Qty", "Discount %", "Amount"]];
-        const body = pageItems.map((it, i) => {
-          // Split item description into multiple lines if needed
-          const descLines = pdf.splitTextToSize(it.desc, 40); // 40mm width for description
-          return [
-            startIndex + i + 1, 
-            {content: descLines, styles: {halign: 'left', cellPadding: {top: 2, right: 1, bottom: 2, left: 1}}}, 
-            it.hs, 
-            it.country, 
-            it.unit, 
-            {content: money(it.rate), styles: {halign: 'right'}}, 
-            it.qty, 
-            it.discount,
-            {content: money(it.rate * it.qty * (1 - it.discount / 100)), styles: {halign: 'right'}}
-          ];
-        });
+        const body = pageItems.map((it, i) => [
+          startIndex + i + 1, 
+          it.desc, 
+          it.hs, 
+          it.country, 
+          it.unit, 
+          {content: money(it.rate), styles: {halign: 'right'}}, 
+          it.qty, 
+          it.discount,
+          {content: money(it.rate * it.qty * (1 - it.discount / 100)), styles: {halign: 'right'}}
+        ]);
         
         const tableOptions = {
           startY: y,
@@ -386,28 +370,19 @@ $('genBtn').onclick = async () => {
             halign: 'center',
             cellPadding: 2
           },
-          bodyStyles: {
-            cellPadding: {top: 2, right: 1, bottom: 2, left: 1}
-          },
           columnStyles: {
-            0: {cellWidth: 10, halign: 'center'}, // S.No
-            1: {cellWidth: 45, halign: 'left'},   // Item Description
-            2: {cellWidth: 18, halign: 'center'}, // HS Code
-            3: {cellWidth: 22, halign: 'center'}, // Country of Origin
-            4: {cellWidth: 12, halign: 'center'}, // Unit
-            5: {cellWidth: 18, halign: 'right'},  // Unit Rate
-            6: {cellWidth: 12, halign: 'center'}, // Qty
-            7: {cellWidth: 15, halign: 'center'}, // Discount %
-            8: {cellWidth: 18, halign: 'right'}   // Amount
+            0: {cellWidth: 12, halign: 'center'}, // S.No
+            1: {cellWidth: 40, halign: 'left'},   // Item Description
+            2: {cellWidth: 20, halign: 'center'}, // HS Code
+            3: {cellWidth: 25, halign: 'center'}, // Country of Origin
+            4: {cellWidth: 15, halign: 'center'}, // Unit
+            5: {cellWidth: 20, halign: 'right'},  // Unit Rate
+            6: {cellWidth: 15, halign: 'center'}, // Qty
+            7: {cellWidth: 18, halign: 'center'}, // Discount %
+            8: {cellWidth: 20, halign: 'right'}   // Amount
           },
           theme: "grid",
           margin: { left: margin, right: margin },
-          didDrawCell: function(data) {
-            // Add extra padding for multiline cells
-            if (data.section === 'body' && data.column.index === 1 && data.cell.raw.length > 1) {
-              data.row.height += (data.cell.raw.length - 1) * 4;
-            }
-          }
         };
         
         pdf.autoTable(tableOptions);
