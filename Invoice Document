@@ -21,16 +21,30 @@
     .text-left {
       text-align: left;
     }
-    .delete-btn {
-      background-color: #f87171;
-      color: white;
-      padding: 2px 6px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
     }
-    .delete-btn:hover {
-      background-color: #ef4444;
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+    #itemsTable {
+      table-layout: fixed;
+      width: 100%;
+    }
+    #itemsTable th:nth-child(1) { width: 5%; }  /* S.No */
+    #itemsTable th:nth-child(2) { width: 25%; } /* Description */
+    #itemsTable th:nth-child(3) { width: 10%; } /* HS Code */
+    #itemsTable th:nth-child(4) { width: 12%; } /* Country */
+    #itemsTable th:nth-child(5) { width: 8%; }  /* Unit */
+    #itemsTable th:nth-child(6) { width: 10%; } /* Unit Rate */
+    #itemsTable th:nth-child(7) { width: 8%; }  /* Qty */
+    #itemsTable th:nth-child(8) { width: 10%; } /* Discount */
+    #itemsTable th:nth-child(9) { width: 12%; } /* Amount */
+    .item-desc-input {
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   </style>
 </head>
@@ -70,7 +84,7 @@
       <input id="stampImg" type="file" accept="image/*" class="text-sm"/>
 
       <button id="addItemBtn" class="w-full bg-blue-600 py-2 rounded hover:bg-blue-700">➕ Add Item</button>
-      <button id="clearItemsBtn" class="w-full bg-red-600 py-2 rounded hover:bg-red-700">🗑 Clear All Items</button>
+      <button id="clearItemsBtn" class="w-full bg-red-600 py-2 rounded hover:bg-red-700">🗑 Clear Items</button>
       <button id="genBtn" class="w-full bg-green-600 py-2 rounded hover:bg-green-700">📑 Generate PDF</button>
     </div>
 
@@ -88,27 +102,34 @@
       </div>
 
       <div class="grid grid-cols-2 gap-2">
-        <textarea id="invoiceTo" rows="5" class="w-full px-2 py-1 rounded border" placeholder="Invoice To"></textarea>
-        <textarea id="shipTo" rows="5" class="w-full px-2 py-1 rounded border" placeholder="Delivery Address"></textarea>
+        <div>
+          <label class="block text-sm mb-1">Invoice To</label>
+          <textarea id="invoiceTo" rows="5" class="w-full px-2 py-1 rounded border" placeholder="Invoice To"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">Delivery Address</label>
+          <textarea id="shipTo" rows="5" class="w-full px-2 py-1 rounded border" placeholder="Delivery Address"></textarea>
+        </div>
       </div>
 
-      <table id="itemsTable" class="w-full text-sm mt-3 border border-gray-300">
-        <thead class="bg-gray-100">
-          <tr>
-            <th class="text-center">S.No</th>
-            <th class="text-left">Item Description</th>
-            <th class="text-center hs-country-col">HS Code</th>
-            <th class="text-center hs-country-col">Country of Origin</th>
-            <th class="text-center">Unit</th>
-            <th class="text-right">Unit Rate</th>
-            <th class="text-center">Qty</th>
-            <th class="text-center">Discount %</th>
-            <th class="text-right">Amount</th>
-            <th class="text-center">Action</th>
-          </tr>
-        </thead>
-        <tbody id="itemsBody"></tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table id="itemsTable" class="w-full text-sm mt-3 border border-gray-300">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="text-center p-1">S.No</th>
+              <th class="text-left p-1">Item Description</th>
+              <th class="text-center p-1">HS Code</th>
+              <th class="text-center p-1">Country of Origin</th>
+              <th class="text-center p-1">Unit</th>
+              <th class="text-right p-1">Unit Rate</th>
+              <th class="text-center p-1">Qty</th>
+              <th class="text-center p-1">Discount %</th>
+              <th class="text-right p-1">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+      </div>
 
       <div class="text-right font-bold text-lg mt-3">
         Total: <span id="webTotal">0.00</span>
@@ -129,100 +150,48 @@ function addItem() {
   render();
 }
 function clearItems() { items = []; render(); }
-function deleteItem(index) {
-  items.splice(index, 1);
-  render();
-}
-
-// Function to toggle HS Code and Country of Origin columns
-function toggleColumns() {
-  const docType = $('docType').value;
-  const hsCountryCols = document.querySelectorAll('.hs-country-col');
-  
-  if (docType === 'dn') {
-    hsCountryCols.forEach(col => col.style.display = 'none');
-  } else {
-    hsCountryCols.forEach(col => col.style.display = 'table-cell');
-  }
-}
-
 function render() {
   const body = $('itemsBody'); body.innerHTML = "";
-  const docType = $('docType').value;
-  
   items.forEach((it, i) => {
     const row = document.createElement("tr");
     row.className = "border-b";
     const amount = it.rate * it.qty * (1 - it.discount / 100);
-    
-    let rowHtml = `
-      <td class="text-center">${i + 1}</td>
-      <td><input data-i="${i}" data-f="desc" value="${it.desc}" class="w-full border px-1 text-left"/></td>
+    row.innerHTML = `
+      <td class="text-center p-1">${i + 1}</td>
+      <td class="p-1"><textarea data-i="${i}" data-f="desc" class="w-full border px-1 text-left item-desc-input" rows="2">${it.desc}</textarea></td>
+      <td class="p-1"><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1 text-center"/></td>
+      <td class="p-1"><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1 text-center"/></td>
+      <td class="p-1"><input data-i="${i}" data-f="unit" value="${it.unit}" class="w-full border px-1 text-center"/></td>
+      <td class="p-1"><input data-i="${i}" data-f="rate" type="number" step="0.01" value="${it.rate}" class="w-full border px-1 text-right"/></td>
+      <td class="p-1"><input data-i="${i}" data-f="qty" type="number" step="1" value="${it.qty}" class="w-full border px-1 text-center"/></td>
+      <td class="p-1"><input data-i="${i}" data-f="discount" type="number" step="0.01" value="${it.discount}" class="w-full border px-1 text-center"/></td>
+      <td class="amount text-right p-1">${money(amount)}</td>
     `;
-    
-    // Only show HS Code and Country of Origin for non-delivery notes
-    if (docType !== 'dn') {
-      rowHtml += `
-        <td class="hs-country-col"><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1 text-center"/></td>
-        <td class="hs-country-col"><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1 text-center"/></td>
-      `;
-    }
-    
-    rowHtml += `
-      <td><input data-i="${i}" data-f="unit" value="${it.unit}" class="w-full border px-1 text-center"/></td>
-      <td><input data-i="${i}" data-f="rate" type="number" value="${it.rate}" class="w-full border px-1 text-right"/></td>
-      <td><input data-i="${i}" data-f="qty" type="number" value="${it.qty}" class="w-full border px-1 text-center"/></td>
-      <td><input data-i="${i}" data-f="discount" type="number" value="${it.discount}" class="w-full border px-1 text-center"/></td>
-      <td class="amount text-right">${money(amount)}</td>
-      <td class="text-center"><button class="delete-btn" data-i="${i}">Remove</button></td>
-    `;
-    
-    row.innerHTML = rowHtml;
     body.appendChild(row);
   });
-  
-  body.querySelectorAll("input").forEach(inp => {
+  body.querySelectorAll("input, textarea").forEach(inp => {
     inp.addEventListener("input", () => {
       const i = inp.dataset.i, f = inp.dataset.f;
       items[i][f] = f === "rate" || f === "qty" || f === "discount" ? Number(inp.value) : inp.value;
       updateTotals(); renderAmountsOnly();
     });
   });
-  
-  body.querySelectorAll(".delete-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const i = btn.dataset.i;
-      deleteItem(parseInt(i));
-    });
-  });
-  
   updateTotals();
 }
-
 function renderAmountsOnly() {
   document.querySelectorAll("#itemsBody tr").forEach((row, i) => {
     const amount = items[i].rate * items[i].qty * (1 - items[i].discount / 100);
     row.querySelector(".amount").textContent = money(amount);
   });
 }
-
 function updateTotals() {
   let subtotal = items.reduce((s, it) => s + (it.rate * it.qty * (1 - it.discount / 100)), 0);
   const currencyCode = $('currency').value;
   $("webTotal").textContent = currencyCode + " " + money(subtotal);
 }
-
-// Event listeners
 $('addItemBtn').onclick = addItem;
 $('clearItemsBtn').onclick = clearItems;
-$('docType').onchange = function() {
-  toggleColumns();
-  render();
-};
-
-// Initialize
 addItem();
-toggleColumns();
 
 function readFile(file) {
   return new Promise(r => {
@@ -285,154 +254,271 @@ $('genBtn').onclick = async () => {
     const stampImg = await readFile($('stampImg').files[0]);
     const currencyCode = $('currency').value;
 
+    // Adjust header position to prevent overlapping
+    let headerY = 5;
     if (headerLogo) {
-      pdf.addImage(headerLogo, "PNG", margin, 5, pageW - 2 * margin, 20);
+      pdf.addImage(headerLogo, "PNG", margin, headerY, pageW - 2 * margin, 20);
+      headerY += 25; // Increase space after logo
+    } else {
+      headerY = 10;
     }
+    
     pdf.setFontSize(9);
     pdf.setTextColor(0, 0, 0);
-    pdf.text("GST Registered No: 202018019H.", margin, 30);
+    pdf.text("GST Registered No: 202018019H.", margin, headerY);
+    headerY += 5;
 
     pdf.setFontSize(14);
     pdf.setTextColor(0, 0, 0);
-    if (docType === "invoice") pdf.text("COMMERCIAL INVOICE", pageW / 2, 40, { align: "center" });
-    else if (docType === "packing") pdf.text("PACKING LIST", pageW / 2, 40, { align: "center" });
-    else pdf.text("DELIVERY NOTE", pageW / 2, 40, { align: "center" });
+    const titleY = headerY + 10;
+    if (docType === "invoice") pdf.text("COMMERCIAL INVOICE", pageW / 2, titleY, { align: "center" });
+    else if (docType === "packing") pdf.text("PACKING LIST", pageW / 2, titleY, { align: "center" });
+    else pdf.text("DELIVERY NOTE", pageW / 2, titleY, { align: "center" });
 
     pdf.setFontSize(10);
-    pdf.text(`No: ${$('docNo').value || "DOC-" + Date.now()}`, pageW / 2, 46, { align: "center" });
-    pdf.text(`Date: ${$('docDate').value}`, pageW / 2, 52, { align: "center" });
+    pdf.text(`No: ${$('docNo').value || "DOC-" + Date.now()}`, pageW / 2, titleY + 6, { align: "center" });
+    pdf.text(`Date: ${$('docDate').value}`, pageW / 2, titleY + 12, { align: "center" });
 
-    let y = 60;
+    let y = titleY + 20;
     pdf.setDrawColor(0, 0, 0);
     pdf.setTextColor(0, 0, 0);
-    pdf.rect(margin, y, pageW - 2 * margin, 36);
+    
+    // Handle package details with proper text wrapping and alignment
+    const packageDetails = $('packageDetails').value;
+    const packageLines = pdf.splitTextToSize(`PACKAGE DETAILS: ${packageDetails}`, pageW - 2 * margin - 8);
+    const detailsBoxHeight = Math.max(36, 6 + (packageLines.length * 5));
+    
+    pdf.rect(margin, y, pageW - 2 * margin, detailsBoxHeight);
     let boxY = y + 6;
     pdf.text(`VESSEL NAME: ${$('vesselName').value}`, margin + 4, boxY); boxY += 5;
     pdf.text(`IMO NUMBER: ${$('imoNumber').value}`, margin + 4, boxY); boxY += 5;
     pdf.text(`PO NUMBER: ${$('poNumber').value}`, margin + 4, boxY); boxY += 5;
     pdf.text(`WES NO: ${$('wesNumber').value}`, margin + 4, boxY); boxY += 5;
     pdf.text(`CLIENT NAME: ${$('clientName').value}`, margin + 4, boxY); boxY += 5;
-    pdf.text(`PACKAGE DETAILS: ${$('packageDetails').value}`, margin + 4, boxY);
+    
+    // Handle multi-line package details with proper alignment
+    if (packageLines.length > 0) {
+      pdf.text(packageLines[0], margin + 4, boxY);
+      for (let i = 1; i < packageLines.length; i++) {
+        boxY += 5;
+        pdf.text(packageLines[i], margin + 4, boxY);
+      }
+    }
 
-    y += 40;
+    y += detailsBoxHeight + 5;
+
     const colW = (pageW - 2 * margin) / 2 - 4;
-    const invoiceLines = pdf.splitTextToSize($('invoiceTo').value.trim(), colW);
-    const shipLines = pdf.splitTextToSize($('shipTo').value.trim(), colW);
+    
+    // Improved text handling for addresses with better overflow management
+    const invoiceText = $('invoiceTo').value.trim();
+    const shipText = $('shipTo').value.trim();
+    
+    const invoiceLines = pdf.splitTextToSize(invoiceText, colW);
+    const shipLines = pdf.splitTextToSize(shipText, colW);
+    
     const maxLines = Math.max(invoiceLines.length, shipLines.length);
-    const boxHeight = (maxLines + 1) * 6 + 6;
-    pdf.rect(margin, y, pageW - 2 * margin, boxHeight);
-    pdf.line(margin + colW + 8, y, margin + colW + 8, y + boxHeight);
+    const addressBoxHeight = Math.max(36, (maxLines + 1) * 5 + 6);
+    
+    pdf.rect(margin, y, pageW - 2 * margin, addressBoxHeight);
+    pdf.line(margin + colW + 8, y, margin + colW + 8, y + addressBoxHeight);
     pdf.setFontSize(10);
     pdf.text("Invoice To:", margin + 4, y + 5);
     pdf.text("Delivery Address:", margin + colW + 12, y + 5);
-    invoiceLines.forEach((line, i) => pdf.text(line, margin + 4, y + 11 + i * 5));
-    shipLines.forEach((line, i) => pdf.text(line, margin + colW + 12, y + 11 + i * 5));
+    
+    // Improved address text rendering with proper alignment
+    invoiceLines.forEach((line, i) => {
+      pdf.text(line, margin + 4, y + 11 + i * 5);
+    });
+    shipLines.forEach((line, i) => {
+      pdf.text(line, margin + colW + 12, y + 11 + i * 5);
+    });
 
-    y += boxHeight + 5;
+    y += addressBoxHeight + 5;
 
     if (docType === "invoice") {
-      const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Unit Rate", "Qty", "Discount %", "Amount"]];
-      const body = items.map((it, i) => [
-        i + 1, 
-        it.desc, 
-        it.hs, 
-        it.country, 
-        it.unit, 
-        {content: money(it.rate), styles: {halign: 'right'}}, 
-        it.qty, 
-        it.discount,
-        {content: money(it.rate * it.qty * (1 - it.discount / 100)), styles: {halign: 'right'}}
-      ]);
+      // Split items into pages with max 7 items per page
+      const itemsPerPage = 7;
+      const totalPages = Math.ceil(items.length / itemsPerPage);
       
-      pdf.autoTable({
-        startY: y,
-        head,
-        body,
-        styles: { fontSize: 8, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0] },
-        headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold", halign: 'center' },
-        columnStyles: {
-          0: {halign: 'center'}, // S.No
-          1: {halign: 'left'},   // Item Description
-          2: {halign: 'center'}, // HS Code
-          3: {halign: 'center'}, // Country of Origin
-          4: {halign: 'center'}, // Unit
-          5: {halign: 'right'},  // Unit Rate
-          6: {halign: 'center'}, // Qty
-          7: {halign: 'center'}, // Discount %
-          8: {halign: 'right'}   // Amount
-        },
-        theme: "grid",
-        margin: { left: margin, right: margin, bottom: 30 },
-      });
+      for (let page = 0; page < totalPages; page++) {
+        if (page > 0) {
+          pdf.addPage();
+          y = margin;
+        }
+        
+        const startIndex = page * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, items.length);
+        const pageItems = items.slice(startIndex, endIndex);
+        
+        const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Unit Rate", "Qty", "Discount %", "Amount"]];
+        const body = pageItems.map((it, i) => {
+          // Split item description into multiple lines if needed
+          const descLines = pdf.splitTextToSize(it.desc, 40); // 40mm width for description
+          return [
+            startIndex + i + 1, 
+            {content: descLines, styles: {halign: 'left', cellPadding: {top: 2, right: 1, bottom: 2, left: 1}}}, 
+            it.hs, 
+            it.country, 
+            it.unit, 
+            {content: money(it.rate), styles: {halign: 'right'}}, 
+            it.qty, 
+            it.discount,
+            {content: money(it.rate * it.qty * (1 - it.discount / 100)), styles: {halign: 'right'}}
+          ];
+        });
+        
+        const tableOptions = {
+          startY: y,
+          head,
+          body,
+          styles: { 
+            fontSize: 8, 
+            lineColor: [0,0,0], 
+            lineWidth: 0.5, 
+            textColor: [0,0,0],
+            cellPadding: 1.5,
+            overflow: 'linebreak'
+          },
+          headStyles: { 
+            fillColor: [200,255,200], 
+            textColor: [0,0,0], 
+            fontStyle: "bold", 
+            halign: 'center',
+            cellPadding: 2
+          },
+          bodyStyles: {
+            cellPadding: {top: 2, right: 1, bottom: 2, left: 1}
+          },
+          columnStyles: {
+            0: {cellWidth: 10, halign: 'center'}, // S.No
+            1: {cellWidth: 45, halign: 'left'},   // Item Description
+            2: {cellWidth: 18, halign: 'center'}, // HS Code
+            3: {cellWidth: 22, halign: 'center'}, // Country of Origin
+            4: {cellWidth: 12, halign: 'center'}, // Unit
+            5: {cellWidth: 18, halign: 'right'},  // Unit Rate
+            6: {cellWidth: 12, halign: 'center'}, // Qty
+            7: {cellWidth: 15, halign: 'center'}, // Discount %
+            8: {cellWidth: 18, halign: 'right'}   // Amount
+          },
+          theme: "grid",
+          margin: { left: margin, right: margin },
+          didDrawCell: function(data) {
+            // Add extra padding for multiline cells
+            if (data.section === 'body' && data.column.index === 1 && data.cell.raw.length > 1) {
+              data.row.height += (data.cell.raw.length - 1) * 4;
+            }
+          }
+        };
+        
+        pdf.autoTable(tableOptions);
 
-      let finalY = pdf.lastAutoTable.finalY + 10;
-      let subtotal = items.reduce((s, it) => s + (it.qty * it.rate * (1 - it.discount / 100)), 0);
-      const lastColX = pdf.lastAutoTable.finalX || (pageW - margin);
-      pdf.setFontSize(10);
-      pdf.text(`Subtotal: ${currencyCode} ${money(subtotal)}`, lastColX, finalY, { align: "right" });
-      pdf.text(`GST (0%): ${currencyCode} 0.00`, lastColX, finalY + 6, { align: "right" });
-      pdf.setFontSize(12);
-      pdf.text(`TOTAL: ${currencyCode} ${money(subtotal)}`, lastColX, finalY + 14, { align: "right" });
+        let finalY = pdf.lastAutoTable.finalY + 10;
+        
+        // Only show totals on the last page
+        if (page === totalPages - 1) {
+          let subtotal = items.reduce((s, it) => s + (it.qty * it.rate * (1 - it.discount / 100)), 0);
+          const lastColX = pdf.lastAutoTable.finalX || (pageW - margin);
+          
+          // Check if we have enough space for totals and stamp
+          const totalsHeight = 30;
+          if (finalY + totalsHeight > pageH - margin - 20) {
+            pdf.addPage();
+            finalY = margin;
+          }
+          
+          pdf.setFontSize(10);
+          pdf.text(`Subtotal: ${currencyCode} ${money(subtotal)}`, lastColX, finalY, { align: "right" });
+          pdf.text(`GST (0%): ${currencyCode} 0.00`, lastColX, finalY + 6, { align: "right" });
+          pdf.setFontSize(12);
+          pdf.text(`TOTAL: ${currencyCode} ${money(subtotal)}`, lastColX, finalY + 14, { align: "right" });
+          finalY += 20;
+        }
 
-      pdf.setFontSize(9);
-      pdf.setTextColor(0, 0, 0);
-      pdf.text("Issued by:", margin, pageH - margin - 20);
-      pdf.text("WES Marine Controls Pte Ltd.", margin, pageH - margin - 14);
-      pdf.text("This invoice is not for payment", margin, pageH - margin - 4);
+        // Add footer only on the last page
+        if (page === totalPages - 1) {
+          // Check if we have enough space for footer
+          if (finalY > pageH - margin - 20) {
+            pdf.addPage();
+            finalY = margin;
+          }
+          
+          pdf.setFontSize(9);
+          pdf.setTextColor(0, 0, 0);
+          pdf.text("Issued by:", margin, pageH - margin - 20);
+          pdf.text("WES Marine Controls Pte Ltd.", margin, pageH - margin - 14);
+          pdf.text("This invoice is not for payment", margin, pageH - margin - 4);
 
-      if (stampImg) {
-        const stampSize = 25;
-        pdf.addImage(stampImg, "PNG", pageW - margin - stampSize, pageH - margin - stampSize, stampSize, stampSize);
+          if (stampImg) {
+            const stampSize = 25;
+            // Ensure stamp doesn't overlap with totals
+            const stampY = Math.max(pageH - margin - stampSize, finalY + 10);
+            pdf.addImage(stampImg, "PNG", pageW - margin - stampSize, stampY, stampSize, stampSize);
+          }
+        }
       }
-
-    } else if (docType === "packing") {
-      const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Qty"]];
-      const body = items.map((it, i) => [
-        i + 1, 
-        {content: it.desc, styles: {halign: 'left'}},
-        it.hs, 
-        it.country, 
-        it.unit, 
-        it.qty
-      ]);
-      pdf.autoTable({
-        startY: y,
-        head,
-        body,
-        styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0], halign: 'center' },
-        headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold", halign: 'center' },
-        columnStyles: {
-          1: {halign: 'left'} // Item Description left-aligned
-        },
-        theme: "grid",
-        margin: { left: margin, right: margin, bottom: 30 },
-      });
+    } else {
+      // For packing list and delivery note
+      const itemsPerPage = 7;
+      const totalPages = Math.ceil(items.length / itemsPerPage);
       
-      // Use the modified receiver box for packing list and delivery note
-      drawReceiverBox(pdf, pageW, pageH, margin, pdf.lastAutoTable.finalY + 10);
-    } else { // Delivery Note
-      const head = [["S.No", "Item Description", "Unit", "Qty"]];
-      const body = items.map((it, i) => [
-        i + 1, 
-        {content: it.desc, styles: {halign: 'left'}},
-        it.unit, 
-        it.qty
-      ]);
-      pdf.autoTable({
-        startY: y,
-        head,
-        body,
-        styles: { fontSize: 9, lineColor: [0,0,0], lineWidth: 0.5, textColor: [0,0,0], halign: 'center' },
-        headStyles: { fillColor: [200,255,200], textColor: [0,0,0], fontStyle: "bold", halign: 'center' },
-        columnStyles: {
-          1: {halign: 'left'} // Item Description left-aligned
-        },
-        theme: "grid",
-        margin: { left: margin, right: margin, bottom: 30 },
-      });
-      
-      // Use the modified receiver box for delivery note
-      drawReceiverBox(pdf, pageW, pageH, margin, pdf.lastAutoTable.finalY + 10);
+      for (let page = 0; page < totalPages; page++) {
+        if (page > 0) {
+          pdf.addPage();
+          y = margin;
+        }
+        
+        const startIndex = page * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, items.length);
+        const pageItems = items.slice(startIndex, endIndex);
+        
+        const head = [["S.No", "Item Description", "HS Code", "Country of Origin", "Unit", "Qty"]];
+        const body = pageItems.map((it, i) => [
+          startIndex + i + 1, 
+          {content: it.desc, styles: {halign: 'left'}},
+          it.hs, 
+          it.country, 
+          it.unit, 
+          it.qty
+        ]);
+        
+        pdf.autoTable({
+          startY: y,
+          head,
+          body,
+          styles: { 
+            fontSize: 9, 
+            lineColor: [0,0,0], 
+            lineWidth: 0.5, 
+            textColor: [0,0,0], 
+            halign: 'center',
+            cellPadding: 1.5
+          },
+          headStyles: { 
+            fillColor: [200,255,200], 
+            textColor: [0,0,0], 
+            fontStyle: "bold", 
+            halign: 'center',
+            cellPadding: 2
+          },
+          columnStyles: {
+            1: {halign: 'left', cellWidth: 70} // Item Description left-aligned
+          },
+          theme: "grid",
+          margin: { left: margin, right: margin },
+        });
+        
+        // Only add receiver box on the last page
+        if (page === totalPages - 1) {
+          const receiverY = pdf.lastAutoTable.finalY + 10;
+          // Check if we have enough space for receiver box
+          if (receiverY + 60 > pageH) {
+            pdf.addPage();
+            drawReceiverBox(pdf, pageW, pageH, margin, margin);
+          } else {
+            drawReceiverBox(pdf, pageW, pageH, margin, receiverY);
+          }
+        }
+      }
     }
 
     pdf.save((docType === "invoice" ? "commercial_invoice" :
