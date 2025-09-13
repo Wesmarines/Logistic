@@ -34,7 +34,7 @@
       width: 100%;
     }
     #itemsTable th:nth-child(1) { width: 5%; }  /* S.No */
-    #itemsTable th:nth-child(2) { width: 25%; } /* Description */
+    #itemsTable th:nth-child(2) { width: 35%; } /* Description - Increased from 25% */
     #itemsTable th:nth-child(3) { width: 10%; } /* HS Code */
     #itemsTable th:nth-child(4) { width: 12%; } /* Country */
     #itemsTable th:nth-child(5) { width: 8%; }  /* Unit */
@@ -42,6 +42,20 @@
     #itemsTable th:nth-child(7) { width: 8%; }  /* Qty */
     #itemsTable th:nth-child(8) { width: 10%; } /* Discount */
     #itemsTable th:nth-child(9) { width: 12%; } /* Amount */
+    #itemsTable th:nth-child(10) { width: 5%; } /* Action */
+    
+    .remove-btn {
+      background: #f87171;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .remove-btn:hover {
+      background: #ef4444;
+    }
   </style>
 </head>
 <body class="bg-gray-200 font-sans">
@@ -114,20 +128,21 @@
             <tr>
               <th class="text-center p-1">S.No</th>
               <th class="text-left p-1">Item Description</th>
-              <th class="text-center p-1">HS Code</th>
-              <th class="text-center p-1">Country of Origin</th>
+              <th class="text-center p-1 dn-hide">HS Code</th>
+              <th class="text-center p-1 dn-hide">Country of Origin</th>
               <th class="text-center p-1">Unit</th>
-              <th class="text-right p-1">Unit Rate</th>
+              <th class="text-right p-1 invoice-hide">Unit Rate</th>
               <th class="text-center p-1">Qty</th>
-              <th class="text-center p-1">Discount %</th>
-              <th class="text-right p-1">Amount</th>
+              <th class="text-center p-1 invoice-hide">Discount %</th>
+              <th class="text-right p-1 invoice-hide">Amount</th>
+              <th class="text-center p-1">Action</th>
             </tr>
           </thead>
           <tbody id="itemsBody"></tbody>
         </table>
       </div>
 
-      <div class="text-right font-bold text-lg mt-3">
+      <div class="text-right font-bold text-lg mt-3 invoice-hide">
         Total: <span id="webTotal">0.00</span>
       </div>
     </div>
@@ -145,7 +160,32 @@ function addItem() {
   items.push({ desc: "", hs: "", country: "", unit: "PCE", rate: 0, qty: 1, discount: 0 });
   render();
 }
+
+function removeItem(index) {
+  items.splice(index, 1);
+  render();
+}
+
 function clearItems() { items = []; render(); }
+
+function updateColumnVisibility() {
+  const docType = $('docType').value;
+  const isInvoice = docType === 'invoice';
+  const isDN = docType === 'dn';
+  
+  // Show/hide columns based on document type
+  document.querySelectorAll('.dn-hide').forEach(el => {
+    el.style.display = isDN ? 'none' : '';
+  });
+  
+  document.querySelectorAll('.invoice-hide').forEach(el => {
+    el.style.display = isInvoice ? '' : 'none';
+  });
+  
+  // Update web total visibility
+  $('webTotal').parentElement.style.display = isInvoice ? '' : 'none';
+}
+
 function render() {
   const body = $('itemsBody'); body.innerHTML = "";
   items.forEach((it, i) => {
@@ -155,16 +195,18 @@ function render() {
     row.innerHTML = `
       <td class="text-center p-1">${i + 1}</td>
       <td class="p-1"><input data-i="${i}" data-f="desc" value="${it.desc}" class="w-full border px-1 text-left"/></td>
-      <td class="p-1"><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1 text-center"/></td>
-      <td class="p-1"><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1 text-center"/></td>
+      <td class="p-1 dn-hide"><input data-i="${i}" data-f="hs" value="${it.hs}" class="w-full border px-1 text-center"/></td>
+      <td class="p-1 dn-hide"><input data-i="${i}" data-f="country" value="${it.country}" class="w-full border px-1 text-center"/></td>
       <td class="p-1"><input data-i="${i}" data-f="unit" value="${it.unit}" class="w-full border px-1 text-center"/></td>
-      <td class="p-1"><input data-i="${i}" data-f="rate" type="number" step="0.01" value="${it.rate}" class="w-full border px-1 text-right"/></td>
+      <td class="p-1 invoice-hide"><input data-i="${i}" data-f="rate" type="number" step="0.01" value="${it.rate}" class="w-full border px-1 text-right"/></td>
       <td class="p-1"><input data-i="${i}" data-f="qty" type="number" step="1" value="${it.qty}" class="w-full border px-1 text-center"/></td>
-      <td class="p-1"><input data-i="${i}" data-f="discount" type="number" step="0.01" value="${it.discount}" class="w-full border px-1 text-center"/></td>
-      <td class="amount text-right p-1">${money(amount)}</td>
+      <td class="p-1 invoice-hide"><input data-i="${i}" data-f="discount" type="number" step="0.01" value="${it.discount}" class="w-full border px-1 text-center"/></td>
+      <td class="amount text-right p-1 invoice-hide">${money(amount)}</td>
+      <td class="text-center p-1"><button class="remove-btn" data-index="${i}">✕</button></td>
     `;
     body.appendChild(row);
   });
+  
   body.querySelectorAll("input").forEach(inp => {
     inp.addEventListener("input", () => {
       const i = inp.dataset.i, f = inp.dataset.f;
@@ -172,21 +214,40 @@ function render() {
       updateTotals(); renderAmountsOnly();
     });
   });
+  
+  // Add event listeners to remove buttons
+  body.querySelectorAll(".remove-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const index = parseInt(btn.getAttribute("data-index"));
+      removeItem(index);
+    });
+  });
+  
+  updateColumnVisibility();
   updateTotals();
 }
+
 function renderAmountsOnly() {
   document.querySelectorAll("#itemsBody tr").forEach((row, i) => {
-    const amount = items[i].rate * items[i].qty * (1 - items[i].discount / 100);
-    row.querySelector(".amount").textContent = money(amount);
+    if (items[i]) {
+      const amount = items[i].rate * items[i].qty * (1 - items[i].discount / 100);
+      const amountCell = row.querySelector(".amount");
+      if (amountCell) {
+        amountCell.textContent = money(amount);
+      }
+    }
   });
 }
+
 function updateTotals() {
   let subtotal = items.reduce((s, it) => s + (it.rate * it.qty * (1 - it.discount / 100)), 0);
   const currencyCode = $('currency').value;
   $("webTotal").textContent = currencyCode + " " + money(subtotal);
 }
+
 $('addItemBtn').onclick = addItem;
 $('clearItemsBtn').onclick = clearItems;
+$('docType').onchange = updateColumnVisibility;
 addItem();
 
 function readFile(file) {
@@ -431,8 +492,8 @@ $('genBtn').onclick = async () => {
           }
         }
       }
-    } else {
-      // For packing list and delivery note
+    } else if (docType === "packing") {
+      // For packing list
       const itemsPerPage = 7;
       const totalPages = Math.ceil(items.length / itemsPerPage);
       
@@ -494,6 +555,70 @@ $('genBtn').onclick = async () => {
           }
         }
       }
+    } else {
+      // For delivery note - simplified table without HS Code and Country of Origin
+      const itemsPerPage = 10; // More items per page since we have fewer columns
+      const totalPages = Math.ceil(items.length / itemsPerPage);
+      
+      for (let page = 0; page < totalPages; page++) {
+        if (page > 0) {
+          pdf.addPage();
+          y = margin;
+        }
+        
+        const startIndex = page * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, items.length);
+        const pageItems = items.slice(startIndex, endIndex);
+        
+        const head = [["S.No", "Item Description", "Unit", "Qty"]];
+        const body = pageItems.map((it, i) => [
+          startIndex + i + 1, 
+          {content: it.desc, styles: {halign: 'left'}},
+          it.unit, 
+          it.qty
+        ]);
+        
+        pdf.autoTable({
+          startY: y,
+          head,
+          body,
+          styles: { 
+            fontSize: 10, 
+            lineColor: [0,0,0], 
+            lineWidth: 0.5, 
+            textColor: [0,0,0], 
+            halign: 'center',
+            cellPadding: 2
+          },
+          headStyles: { 
+            fillColor: [200,255,200], 
+            textColor: [0,0,0], 
+            fontStyle: "bold", 
+            halign: 'center',
+            cellPadding: 3
+          },
+          columnStyles: {
+            0: {cellWidth: 15, halign: 'center'}, // S.No
+            1: {cellWidth: 'auto', halign: 'left'}, // Item Description (takes remaining space)
+            2: {cellWidth: 25, halign: 'center'}, // Unit
+            3: {cellWidth: 25, halign: 'center'}  // Qty
+          },
+          theme: "grid",
+          margin: { left: margin, right: margin },
+        });
+        
+        // Only add receiver box on the last page
+        if (page === totalPages - 1) {
+          const receiverY = pdf.lastAutoTable.finalY + 10;
+          // Check if we have enough space for receiver box
+          if (receiverY + 60 > pageH) {
+            pdf.addPage();
+            drawReceiverBox(pdf, pageW, pageH, margin, margin);
+          } else {
+            drawReceiverBox(pdf, pageW, pageH, margin, receiverY);
+          }
+        }
+      }
     }
 
     pdf.save((docType === "invoice" ? "commercial_invoice" :
@@ -507,4 +632,3 @@ $('genBtn').onclick = async () => {
 </script>
 </body>
 </html>
-
